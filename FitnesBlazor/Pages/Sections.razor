@@ -1,0 +1,330 @@
+﻿@page "/sections"
+
+@using FitnesBlazor.ApiRequests.Models
+@using FitnesBlazor.ApiRequests.Services
+
+@inject SectionApiService SectionApiService
+@inject AuthStateService AuthStateService
+
+<div class="card-page">
+    <h3>Секции и групповые занятия</h3>
+
+    <p>
+        Здесь клиенты записываются в секции, тренер просматривает участников и отмечает посещаемость,
+        а администратор создаёт расписание секций.
+    </p>
+
+    @if (!string.IsNullOrWhiteSpace(message))
+    {
+        <div class="message">@message</div>
+    }
+
+    @if (currentUser != null && currentUser.id_role == 1)
+    {
+        <div class="form-card inner-form">
+            <h4>Создать секцию</h4>
+
+            <label>Название секции</label>
+            <input @bind="createRequest.name" />
+
+            <label>ID тренера</label>
+            <input type="number" @bind="createRequest.trainer_id" />
+
+            <label>Лимит участников</label>
+            <input type="number" @bind="createRequest.max_participants" />
+
+            <label>Дата и время занятия</label>
+            <input type="datetime-local" @bind="createRequest.schedule_time" />
+
+            <button @onclick="CreateSection">Создать секцию</button>
+        </div>
+    }
+
+    @if (sections == null)
+    {
+        <p>Загрузка...</p>
+    }
+    else if (sections.Count == 0)
+    {
+        <p>Секции отсутствуют</p>
+    }
+    else
+    {
+        <div class="module-grid">
+            @foreach (var sportSection in sections)
+            {
+                <div class="module-card">
+                    <div class="module-icon">🥋</div>
+
+                    <h3>@sportSection.name</h3>
+
+                    <p>Тренер: <b>@sportSection.trainer_name</b></p>
+                    <p>Дата и время: <b>@sportSection.schedule_time.ToString("dd.MM.yyyy HH:mm")</b></p>
+                    <p>Участников: <b>@sportSection.participants_count / @(sportSection.max_participants?.ToString() ?? "без лимита")</b></p>
+
+                    @if (currentUser != null && currentUser.id_role == 3)
+                    {
+                        <button @onclick="() => Enroll(sportSection.id_section)">
+                            Записаться
+                        </button>
+                    }
+
+                    @if (currentUser != null && (currentUser.id_role == 1 || currentUser.id_role == 2))
+                    {
+                        <hr />
+
+                        <button @onclick="() => LoadEnrollments(sportSection.id_section)">
+                            Показать участников
+                        </button>
+
+                        <button @onclick="() => LoadAttendance(sportSection.id_section)">
+                            Показать посещаемость
+                        </button>
+
+                        @if (selectedSectionId == sportSection.id_section && enrollments != null)
+                        {
+                            <div class="participants-box">
+                                <h4>Участники секции</h4>
+
+                                @if (enrollments.Count == 0)
+                                {
+                                    <p>Пока никто не записан</p>
+                                }
+                                else
+                                {
+                                    @foreach (var enrollment in enrollments)
+                                    {
+                                        <div class="participant-row">
+                                            <span>@enrollment.user_name</span>
+
+                                            @if (currentUser.id_role == 2)
+                                            {
+                                                <label>
+                                                    <input type="checkbox"
+                                                           @bind="attendanceForms[enrollment.id_enrollment].is_present" />
+                                                    Присутствовал
+                                                </label>
+
+                                                <input placeholder="Комментарий"
+                                                       @bind="attendanceForms[enrollment.id_enrollment].comment" />
+
+                                                <button @onclick="() => MarkAttendance(enrollment.id_enrollment)">
+                                                    Сохранить
+                                                </button>
+                                            }
+
+                                            @if (currentUser.id_role == 1)
+                                            {
+                                                <button @onclick="() => DeleteEnrollment(enrollment.id_enrollment)">
+                                                    Удалить
+                                                </button>
+                                            }
+                                        </div>
+                                    }
+                                }
+                            </div>
+                        }
+
+                        @if (selectedAttendanceSectionId == sportSection.id_section && attendances != null)
+                        {
+                            <div class="participants-box">
+                                <h4>Посещаемость</h4>
+
+                                @if (attendances.Count == 0)
+                                {
+                                    <p>Посещаемость пока не отмечалась</p>
+                                }
+                                else
+                                {
+                                    @foreach (var attendanceItem in attendances)
+                                    {
+                                        <div class="participant-row">
+                                            <span>
+                                                @attendanceItem.attendance_date.ToString("dd.MM.yyyy"):
+                                                @attendanceItem.user_name —
+                                                <b>@(attendanceItem.is_present ? "присутствовал" : "отсутствовал")</b>
+
+                                                @if (!string.IsNullOrWhiteSpace(attendanceItem.comment))
+                                                {
+                                                    <span> (@attendanceItem.comment)</span>
+                                                }
+                                            </span>
+                                        </div>
+                                    }
+                                }
+                            </div>
+                        }
+                    }
+                </div>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    private List<SectionModel>? sections;
+    private List<SectionEnrollmentModel>? enrollments;
+    private List<SectionAttendanceModel>? attendances;
+
+    private UserModel? currentUser;
+
+    private int selectedSectionId;
+    private int selectedAttendanceSectionId;
+
+    private string message = "";
+
+    private Dictionary<int, MarkAttendanceRequest> attendanceForms = new();
+
+    private CreateSectionRequest createRequest = new()
+    {
+        schedule_time = DateTime.Now,
+        max_participants = 10
+    };
+
+    protected override async Task OnInitializedAsync()
+    {
+        currentUser = await AuthStateService.GetCurrentUser();
+        await LoadSections();
+    }
+
+    private async Task LoadSections()
+    {
+        var response = await SectionApiService.GetAll();
+
+        if (response != null && response.status)
+        {
+            sections = response.data;
+        }
+        else
+        {
+            sections = new List<SectionModel>();
+        }
+    }
+
+    private async Task CreateSection()
+    {
+        if (currentUser == null)
+        {
+            message = "Необходимо авторизоваться";
+            return;
+        }
+
+        if (currentUser.id_role != 1)
+        {
+            message = "Создавать секции может только администратор";
+            return;
+        }
+
+        var response = await SectionApiService.Create(createRequest);
+
+        if (response != null)
+        {
+            message = response.message;
+
+            createRequest = new CreateSectionRequest
+            {
+                schedule_time = DateTime.Now,
+                max_participants = 10
+            };
+
+            await LoadSections();
+        }
+    }
+
+    private async Task Enroll(int idSection)
+    {
+        if (currentUser == null)
+        {
+            message = "Необходимо авторизоваться";
+            return;
+        }
+
+        if (currentUser.id_role != 3)
+        {
+            message = "Записаться в секцию может только клиент";
+            return;
+        }
+
+        var response = await SectionApiService.Enroll(new EnrollSectionRequest
+        {
+            id_section = idSection,
+            id_user = currentUser.id_user
+        });
+
+        if (response != null)
+        {
+            message = response.message;
+            await LoadSections();
+        }
+    }
+
+    private async Task LoadEnrollments(int idSection)
+    {
+        selectedSectionId = idSection;
+
+        var response = await SectionApiService.GetEnrollments(idSection);
+
+        if (response != null && response.status)
+        {
+            enrollments = response.data;
+
+            foreach (var enrollment in enrollments)
+            {
+                if (!attendanceForms.ContainsKey(enrollment.id_enrollment))
+                {
+                    attendanceForms[enrollment.id_enrollment] = new MarkAttendanceRequest
+                    {
+                        id_enrollment = enrollment.id_enrollment,
+                        attendance_date = DateTime.Today,
+                        is_present = false,
+                        comment = ""
+                    };
+                }
+            }
+        }
+        else
+        {
+            enrollments = new List<SectionEnrollmentModel>();
+        }
+    }
+
+    private async Task MarkAttendance(int idEnrollment)
+    {
+        if (!attendanceForms.ContainsKey(idEnrollment))
+        {
+            message = "Форма посещаемости не найдена";
+            return;
+        }
+
+        var response = await SectionApiService.MarkAttendance(attendanceForms[idEnrollment]);
+
+        if (response != null)
+        {
+            message = response.message;
+            await LoadAttendance(selectedSectionId);
+        }
+    }
+
+    private async Task LoadAttendance(int idSection)
+    {
+        selectedAttendanceSectionId = idSection;
+
+        var response = await SectionApiService.GetAttendance(idSection);
+
+        attendances = response != null && response.status
+            ? response.data
+            : new List<SectionAttendanceModel>();
+    }
+
+    private async Task DeleteEnrollment(int idEnrollment)
+    {
+        var response = await SectionApiService.DeleteEnrollment(idEnrollment);
+
+        if (response != null)
+        {
+            message = response.message;
+            await LoadEnrollments(selectedSectionId);
+            await LoadSections();
+        }
+    }
+}

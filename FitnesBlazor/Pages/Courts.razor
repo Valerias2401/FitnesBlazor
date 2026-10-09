@@ -1,0 +1,70 @@
+﻿@page "/courts"
+
+@using FitnesBlazor.ApiRequests.Models
+@using FitnesBlazor.ApiRequests.Services
+
+@inject CourtApiService CourtApiService
+
+<div class="card-page">
+
+    <h3>Спортивные площадки</h3>
+
+    <p>
+        Просмотр доступных спортивных площадок комплекса.
+    </p>
+
+    @if (courts == null)
+    {
+        <p>Загрузка...</p>
+    }
+    else if (courts.Count == 0)
+    {
+        <p>Площадки отсутствуют</p>
+    }
+    else
+    {
+        <div class="module-grid">
+
+            @foreach (var item in courts)
+            {
+                <div class="module-card">
+
+                    <div class="module-icon">🏟</div>
+
+                    <h3>@item.name</h3>
+
+                    <p>
+                        Вид спорта:
+                        <b>@item.sport_type</b>
+                    </p>
+
+                    <p>
+                        Цена за час:
+                        <b>@item.price_per_hour руб.</b>
+                    </p>
+
+                </div>
+            }
+
+        </div>
+    }
+</div>
+
+@code {
+
+    private List<CourtModel>? courts;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var response = await CourtApiService.GetAll();
+
+        if (response != null && response.status)
+        {
+            courts = response.data;
+        }
+        else
+        {
+            courts = new List<CourtModel>();
+        }
+    }
+}

@@ -1,0 +1,84 @@
+﻿@page "/login"
+
+@using FitnesBlazor.ApiRequests.Models
+@using FitnesBlazor.ApiRequests.Services
+
+@inject UserApiService UserApiService
+@inject AuthStateService AuthStateService
+@inject NavigationManager Navigation
+
+<div class="login-screen">
+    <div class="login-info">
+        <span class="page-badge">Спортивный комплекс</span>
+        <h1>Платформа управления спорткомплексом</h1>
+        <p>
+            Авторизуйтесь, чтобы получить доступ к бронированию площадок,
+            секциям, абонементам, мероприятиям и аналитике.
+        </p>
+
+        <div class="login-feature-list">
+            <div>🏟 Бронирование площадок</div>
+            <div>🎫 Абонементы</div>
+            <div>🏋️ Секции</div>
+            <div>🏆 Мероприятия</div>
+        </div>
+    </div>
+
+    <div class="login-card">
+        <h2>Вход</h2>
+        <p>Введите данные пользователя</p>
+
+        <label>Email</label>
+        <input @bind="loginRequest.email" placeholder="example@mail.com" />
+
+        <label>Пароль</label>
+        <input type="password" @bind="loginRequest.password" placeholder="Введите пароль" />
+
+        <button class="primary-action" @onclick="LoginUser">Войти</button>
+        <button class="light-action" @onclick="GoRegister">Создать аккаунт</button>
+
+        @if (!string.IsNullOrEmpty(message))
+        {
+            <div class="message">@message</div>
+        }
+    </div>
+</div>
+
+@code {
+    private LoginRequest loginRequest = new();
+    private string message = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        UserModel? user = await AuthStateService.GetCurrentUser();
+
+        if (user != null)
+        {
+            Navigation.NavigateTo("/");
+        }
+    }
+
+    private async Task LoginUser()
+    {
+        var response = await UserApiService.Login(loginRequest);
+
+        if (response == null)
+        {
+            message = "Ошибка сервера";
+            return;
+        }
+
+        message = response.message;
+
+        if (response.status)
+        {
+            await AuthStateService.SaveAuthData(response);
+            Navigation.NavigateTo("/", true);
+        }
+    }
+
+    private void GoRegister()
+    {
+        Navigation.NavigateTo("/register");
+    }
+}

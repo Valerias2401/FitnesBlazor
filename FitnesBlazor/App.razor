@@ -1,0 +1,16 @@
+﻿@using FitnesBlazor.Pages.Guards
+
+<Router AppAssembly="@typeof(App).Assembly">
+    <Found Context="routeData">
+        <RouteGuard RouteData="@routeData" />
+    </Found>
+
+    <NotFound>
+        <LayoutView Layout="@typeof(FitnesBlazor.Layout.MainLayout)">
+            <div class="card-page">
+                <h3>Страница не найдена</h3>
+                <p>Такой страницы в системе нет.</p>
+            </div>
+        </LayoutView>
+    </NotFound>
+</Router>

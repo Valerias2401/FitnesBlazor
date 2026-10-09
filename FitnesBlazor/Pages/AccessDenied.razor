@@ -1,0 +1,22 @@
+﻿@page "/access-denied"
+
+@inject NavigationManager Navigation
+
+<div class="card-page">
+    <h3>Доступ запрещён</h3>
+
+    <p>
+        У вашей роли нет доступа к данному разделу.
+    </p>
+
+    <button @onclick="GoHome">
+        На главную
+    </button>
+</div>
+
+@code {
+    private void GoHome()
+    {
+        Navigation.NavigateTo("/");
+    }
+}

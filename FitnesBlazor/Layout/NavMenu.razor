@@ -1,0 +1,115 @@
+﻿@using FitnesBlazor.ApiRequests.Models
+@using FitnesBlazor.ApiRequests.Services
+
+@inject AuthStateService AuthStateService
+@inject NavigationManager Navigation
+
+<div class="sidebar-logo">
+    <div class="logo-icon">🏟</div>
+    <div>
+        <h1>Fitnes</h1>
+        <span>Sport Complex</span>
+    </div>
+</div>
+
+<nav class="sidebar-nav">
+    @if (currentUser == null)
+    {
+        <NavLink class="menu-link" href="login">
+            <span>🔐</span> Авторизация
+        </NavLink>
+
+        <NavLink class="menu-link" href="register">
+            <span>📝</span> Регистрация
+        </NavLink>
+    }
+    else
+    {
+        <div class="user-box">
+            <div class="user-avatar">👤</div>
+            <div>
+                <b>@currentUser.full_name</b>
+                <span>@RoleName</span>
+            </div>
+        </div>
+
+        <NavLink class="menu-link" href="" Match="NavLinkMatch.All">
+            <span>🏠</span> Главная
+        </NavLink>
+
+        @if (currentUser.id_role == 1 || currentUser.id_role == 3)
+        {
+            <NavLink class="menu-link" href="abonements">
+                <span>🎫</span> Абонементы
+            </NavLink>
+        }
+
+        @if (currentUser.id_role == 1 || currentUser.id_role == 3 || currentUser.id_role == 4)
+        {
+            <NavLink class="menu-link" href="courts">
+                <span>🏟</span> Площадки
+            </NavLink>
+
+            <NavLink class="menu-link" href="bookings">
+                <span>📅</span> Бронирования
+            </NavLink>
+        }
+
+        @if (currentUser.id_role == 1 || currentUser.id_role == 2 || currentUser.id_role == 3)
+        {
+            <NavLink class="menu-link" href="sections">
+                <span>🏋️</span> Секции
+            </NavLink>
+        }
+
+        @if (currentUser.id_role == 1 || currentUser.id_role == 2 || currentUser.id_role == 3 || currentUser.id_role == 4)
+        {
+            <NavLink class="menu-link" href="events">
+                <span>🏆</span> Мероприятия
+            </NavLink>
+        }
+
+        @if (currentUser.id_role == 1)
+        {
+            <NavLink class="menu-link" href="inventory">
+                <span>📦</span> Инвентарь
+            </NavLink>
+
+            <NavLink class="menu-link" href="analytics">
+                <span>📊</span> Аналитика
+            </NavLink>
+        }
+
+        <button class="logout-btn" @onclick="Logout">
+            Выйти
+        </button>
+    }
+</nav>
+
+@code {
+    private UserModel? currentUser;
+
+    private string RoleName
+    {
+        get
+        {
+            if (currentUser == null) return "";
+            if (currentUser.id_role == 1) return "Администратор";
+            if (currentUser.id_role == 2) return "Тренер";
+            if (currentUser.id_role == 3) return "Клиент";
+            if (currentUser.id_role == 4) return "Организатор";
+            return "Пользователь";
+        }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        currentUser = await AuthStateService.GetCurrentUser();
+    }
+
+    private async Task Logout()
+    {
+        await AuthStateService.Logout();
+        Navigation.NavigateTo("/login", true);
+    }
+}

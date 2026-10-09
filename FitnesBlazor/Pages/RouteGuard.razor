@@ -1,0 +1,44 @@
+﻿@using FitnesBlazor.ApiRequests.Models
+@using FitnesBlazor.ApiRequests.Services
+@using FitnesBlazor.Layout
+
+@inject AuthStateService AuthStateService
+@inject AccessControlService AccessControlService
+@inject NavigationManager Navigation
+
+@if (canRender)
+{
+    <RouteView RouteData="@RouteData" DefaultLayout="@typeof(MainLayout)" />
+}
+
+@code {
+    [Parameter]
+    public RouteData RouteData { get; set; } = default!;
+
+    private bool canRender = false;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        string path = new Uri(Navigation.Uri).AbsolutePath;
+
+        UserModel? user = await AuthStateService.GetCurrentUser();
+
+        bool canOpen = AccessControlService.CanOpenPage(path, user);
+
+        if (!canOpen)
+        {
+            if (user == null)
+            {
+                Navigation.NavigateTo("/login");
+            }
+            else
+            {
+                Navigation.NavigateTo("/access-denied");
+            }
+
+            return;
+        }
+
+        canRender = true;
+    }
+}

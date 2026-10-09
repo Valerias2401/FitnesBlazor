@@ -1,0 +1,202 @@
+﻿@page "/inventory"
+
+@using FitnesBlazor.ApiRequests.Models
+@using FitnesBlazor.ApiRequests.Services
+
+@inject InventoryApiService InventoryApiService
+@inject AuthStateService AuthStateService
+
+<div class="card-page">
+    <h3>Инвентарь и оборудование</h3>
+
+    <p>
+        Здесь администратор ведёт учёт спортивного инвентаря,
+        контролирует состояние, ремонт, списание и необходимость закупки.
+    </p>
+
+    @if (!string.IsNullOrWhiteSpace(message))
+    {
+        <div class="message">@message</div>
+    }
+
+    @if (currentUser != null && currentUser.id_role == 1)
+    {
+        <div class="form-card inner-form">
+            <h4>Добавить инвентарь</h4>
+
+            <label>Название</label>
+            <input @bind="createRequest.name" />
+
+            <label>Категория</label>
+            <input @bind="createRequest.category" />
+
+            <label>Количество</label>
+            <input type="number" @bind="createRequest.quantity" />
+
+            <label>Состояние</label>
+            <select @bind="createRequest.status">
+                <option>Исправен</option>
+                <option>Требует ремонта</option>
+                <option>Списан</option>
+            </select>
+
+            <label>Комментарий</label>
+            <input @bind="createRequest.comment" />
+
+            <button @onclick="CreateInventory">Добавить</button>
+        </div>
+    }
+
+    @if (items == null)
+    {
+        <p>Загрузка...</p>
+    }
+    else if (items.Count == 0)
+    {
+        <p>Инвентарь отсутствует</p>
+    }
+    else
+    {
+        <div class="module-grid">
+            @foreach (var item in items)
+            {
+                <div class="module-card">
+                    <div class="module-icon">🏀</div>
+
+                    <h3>@item.name</h3>
+
+                    <p>Категория: <b>@item.category</b></p>
+                    <p>Количество: <b>@item.quantity</b></p>
+                    <p>Состояние: <b>@item.status</b></p>
+                   
+
+                    @if (!string.IsNullOrWhiteSpace(item.comment))
+                    {
+                        <p>Комментарий: @item.comment</p>
+                    }
+
+                    @if (currentUser != null && currentUser.id_role == 1)
+                    {
+                        <hr />
+
+                        <label>Изменить состояние</label>
+                        <select @bind="statusForms[item.id_inventory].status">
+                            <option>Исправен</option>
+                            <option>Требует ремонта</option>
+                            <option>Списан</option>
+                        </select>
+
+                        
+                        <input placeholder="Комментарий"
+                               @bind="statusForms[item.id_inventory].comment" />
+
+                        <button @onclick="() => UpdateStatus(item.id_inventory)">
+                            Сохранить состояние
+                        </button>
+
+                        <button @onclick="() => DeleteInventory(item.id_inventory)">
+                            Удалить
+                        </button>
+                    }
+                </div>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    private List<InventoryModel>? items;
+    private UserModel? currentUser;
+
+    private string message = "";
+
+    private CreateInventoryRequest createRequest = new()
+    {
+        status = "Исправен"
+    };
+
+    private Dictionary<int, UpdateInventoryStatusRequest> statusForms = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        currentUser = await AuthStateService.GetCurrentUser();
+        await LoadInventory();
+    }
+
+    private async Task LoadInventory()
+    {
+        var response = await InventoryApiService.GetAll();
+
+        if (response != null && response.status)
+        {
+            items = response.data;
+
+            foreach (var item in items)
+            {
+                statusForms[item.id_inventory] = new UpdateInventoryStatusRequest
+                {
+                    id_inventory = item.id_inventory,
+                    status = item.status,
+                    need_repair = item.need_repair,
+                    purchase_required = item.purchase_required,
+                    comment = item.comment
+                };
+            }
+        }
+        else
+        {
+            items = new List<InventoryModel>();
+        }
+    }
+
+    private async Task CreateInventory()
+    {
+        if (currentUser == null || currentUser.id_role != 1)
+        {
+            message = "Управлять инвентарём может только администратор";
+            return;
+        }
+
+        var response = await InventoryApiService.Create(createRequest);
+
+        if (response != null)
+        {
+            message = response.message;
+
+            createRequest = new CreateInventoryRequest
+            {
+                status = "Исправен"
+            };
+
+            await LoadInventory();
+        }
+    }
+
+    private async Task UpdateStatus(int idInventory)
+    {
+        if (!statusForms.ContainsKey(idInventory))
+        {
+            message = "Форма состояния не найдена";
+            return;
+        }
+
+        var response = await InventoryApiService.UpdateStatus(statusForms[idInventory]);
+
+        if (response != null)
+        {
+            message = response.message;
+            await LoadInventory();
+        }
+    }
+
+    private async Task DeleteInventory(int idInventory)
+    {
+        var response = await InventoryApiService.Delete(idInventory);
+
+        if (response != null)
+        {
+            message = response.message;
+            await LoadInventory();
+        }
+    }
+}

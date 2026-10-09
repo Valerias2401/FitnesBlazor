@@ -1,0 +1,94 @@
+﻿@page "/register"
+
+@using FitnesBlazor.ApiRequests.Models
+@using FitnesBlazor.ApiRequests.Services
+
+@inject UserApiService UserApiService
+@inject AuthStateService AuthStateService
+@inject NavigationManager Navigation
+
+<div class="login-screen">
+    <div class="login-info">
+        <span class="page-badge">Регистрация</span>
+        <h1>Создание аккаунта клиента</h1>
+        <p>
+            После регистрации пользователь сможет покупать абонементы,
+            бронировать площадки, записываться в секции и участвовать в мероприятиях.
+        </p>
+
+        <div class="login-feature-list">
+            <div>✅ Личный кабинет</div>
+            <div>✅ Запись на занятия</div>
+            <div>✅ Участие в турнирах</div>
+            <div>✅ Покупка абонементов</div>
+        </div>
+    </div>
+
+    <div class="login-card">
+        <h2>Регистрация</h2>
+        <p>Заполните данные пользователя</p>
+
+        <label>ФИО</label>
+        <input @bind="registerRequest.full_name" placeholder="Введите ФИО" />
+
+        <label>Email</label>
+        <input @bind="registerRequest.email" placeholder="example@mail.com" />
+
+        <label>Пароль</label>
+        <input type="password" @bind="registerRequest.password" placeholder="Введите пароль" />
+
+        <label>Телефон</label>
+        <input @bind="registerRequest.phone" placeholder="Введите телефон" />
+
+        <label>Дата рождения</label>
+        <input type="date" @bind="registerRequest.birth_date" />
+
+        <div class="two-buttons">
+            <button class="primary-action" @onclick="RegisterUser">Зарегистрироваться</button>
+            <button class="light-action" @onclick="GoLogin">Назад</button>
+        </div>
+
+        @if (!string.IsNullOrEmpty(message))
+        {
+            <div class="message">@message</div>
+        }
+    </div>
+</div>
+
+@code {
+    private RegisterRequest registerRequest = new();
+    private string message = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        UserModel? user = await AuthStateService.GetCurrentUser();
+
+        if (user != null)
+        {
+            Navigation.NavigateTo("/");
+        }
+    }
+
+    private async Task RegisterUser()
+    {
+        var response = await UserApiService.Register(registerRequest);
+
+        if (response == null)
+        {
+            message = "Ошибка сервера";
+            return;
+        }
+
+        message = response.message;
+
+        if (response.status)
+        {
+            Navigation.NavigateTo("/login");
+        }
+    }
+
+    private void GoLogin()
+    {
+        Navigation.NavigateTo("/login");
+    }
+}

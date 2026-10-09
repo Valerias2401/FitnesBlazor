@@ -1,0 +1,125 @@
+﻿@page "/abonements"
+@using FitnesBlazor.ApiRequests.Models
+@using FitnesBlazor.ApiRequests.Services
+@inject AbonementApiService AbonementApiService
+@inject AuthStateService AuthStateService
+
+<div class="card-page">
+    <h3>Абонементы и тарифы</h3>
+    <p>Администратор настраивает тарифы, клиент покупает абонемент.</p>
+
+    @if (!string.IsNullOrEmpty(message))
+    {
+        <div class="message">@message</div>
+    }
+
+    @if (myAbonements != null && myAbonements.Count > 0)
+    {
+        <div class="form-card inner-form">
+            <h4>Мои абонементы</h4>
+            @foreach (var a in myAbonements)
+            {
+                <div class="module-card">
+                    <p><b>@a.name</b></p>
+                    <p>Действует с <b>@a.start_date.ToString("dd.MM.yyyy")</b> по <b>@a.end_date.ToString("dd.MM.yyyy")</b></p>
+                    @if (a.is_active)
+                    {
+                        <p style="color: green;"><b>✅ Активен</b></p>
+                    }
+                    else
+                    {
+                        <p style="color: red;"><b>❌ Истёк</b></p>
+                    }
+                </div>
+            }
+        </div>
+    }
+
+    @if (abonements == null)
+    {
+        <p>Загрузка...</p>
+    }
+    else if (abonements.Count == 0)
+    {
+        <p>Абонементы не найдены</p>
+    }
+    else
+    {
+        <div class="module-grid">
+            @foreach (var item in abonements)
+            {
+                <div class="module-card">
+                    <div class="module-icon">🎫</div>
+                    <h3>@item.name_abonement</h3>
+                    <p>Цена: <b>@item.price руб.</b></p>
+                    <p>Срок действия: <b>@item.duration_days дней</b></p>
+                    <p>@item.description</p>
+                    @if (currentUser != null && currentUser.id_role == 3)
+                    {
+                        <button @onclick="() => BuyAbonement(item.id_abonement)">
+                            Купить абонемент
+                        </button>
+                    }
+                    @if (currentUser != null && currentUser.id_role == 1)
+                    {
+                        <div class="role-note">
+                            Администратор управляет тарифами
+                        </div>
+                    }
+                </div>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    private List<AbonementModel>? abonements;
+    private List<UserAbonementModel>? myAbonements;
+    private UserModel? currentUser;
+    private string message = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        currentUser = await AuthStateService.GetCurrentUser();
+
+        var response = await AbonementApiService.GetAll();
+        abonements = response != null && response.status
+            ? response.data
+            : new List<AbonementModel>();
+
+        if (currentUser != null && currentUser.id_role == 3)
+        {
+            var myResponse = await AbonementApiService.GetMyAbonements(currentUser.id_user);
+            myAbonements = myResponse != null && myResponse.status
+                ? myResponse.data
+                : new List<UserAbonementModel>();
+        }
+    }
+
+    private async Task BuyAbonement(int idAbonement)
+    {
+        if (currentUser == null)
+        {
+            message = "Необходимо авторизоваться";
+            return;
+        }
+        if (currentUser.id_role != 3)
+        {
+            message = "Покупка абонемента доступна только клиенту";
+            return;
+        }
+        var response = await AbonementApiService.Buy(new BuyAbonementRequest
+        {
+            id_user = currentUser.id_user,
+            id_abonement = idAbonement
+        });
+        if (response != null)
+        {
+            message = response.message;
+            var myResponse = await AbonementApiService.GetMyAbonements(currentUser.id_user);
+            myAbonements = myResponse != null && myResponse.status
+                ? myResponse.data
+                : new List<UserAbonementModel>();
+        }
+    }
+}

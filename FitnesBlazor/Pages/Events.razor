@@ -1,0 +1,555 @@
+﻿@page "/events"
+
+@using FitnesBlazor.ApiRequests.Models
+@using FitnesBlazor.ApiRequests.Services
+
+@inject EventApiService EventApiService
+@inject CourtApiService CourtApiService
+@inject AuthStateService AuthStateService
+
+<div class="card-page">
+    <h3>Мероприятия и соревнования</h3>
+
+    <p>
+        Здесь организатор создаёт соревнования, управляет участниками, формирует расписание игр,
+        турнирную сетку и публикует результаты.
+    </p>
+
+    @if (!string.IsNullOrEmpty(message))
+    {
+        <div class="message">@message</div>
+    }
+
+    @if (currentUser != null && (currentUser.id_role == 1 || currentUser.id_role == 4))
+    {
+        <div class="form-card inner-form">
+            <h4>Создать мероприятие</h4>
+
+            <label>Название</label>
+            <input @bind="createRequest.name" />
+
+            <label>Описание</label>
+            <input @bind="createRequest.description" />
+
+            <label>Дата и время</label>
+            <input type="datetime-local" @bind="createRequest.event_date" />
+
+            <label>Площадка</label>
+            <select @bind="createRequest.id_court">
+                <option value="0">Выберите площадку</option>
+
+                @if (courts != null)
+                {
+                    @foreach (var court in courts)
+                    {
+                        <option value="@court.id_court">@court.name (@court.sport_type)</option>
+                    }
+                }
+            </select>
+
+            <label>Максимум участников</label>
+            <input type="number" @bind="createRequest.max_participants" />
+
+            <button @onclick="CreateEvent">Создать мероприятие</button>
+        </div>
+    }
+
+    @if (events == null)
+    {
+        <p>Загрузка...</p>
+    }
+    else if (events.Count == 0)
+    {
+        <p>Мероприятия отсутствуют</p>
+    }
+    else
+    {
+        <div class="module-grid">
+            @foreach (var item in events)
+            {
+                <div class="module-card">
+                    <div class="module-icon">🏆</div>
+
+                    <h3>@item.name</h3>
+
+                    <p>@item.description</p>
+                    <p>Дата: <b>@item.event_date.ToString("dd.MM.yyyy HH:mm")</b></p>
+                    <p>Площадка: <b>@(string.IsNullOrWhiteSpace(item.court_name) ? item.id_court.ToString() : item.court_name)</b></p>
+                    <p>Участников: <b>@item.participants_count / @item.max_participants</b></p>
+                    <p>Статус: <b>@item.status</b></p>
+
+                    @if (!string.IsNullOrWhiteSpace(item.bracket_info))
+                    {
+                        <p><b>Турнирная сетка:</b> @item.bracket_info</p>
+                    }
+
+                    @if (!string.IsNullOrWhiteSpace(item.game_schedule))
+                    {
+                        <p><b>Расписание игр:</b> @item.game_schedule</p>
+                    }
+
+                    @if (currentUser != null && currentUser.id_role == 3)
+                    {
+                        <button @onclick="() => AddParticipant(item.id_event)">
+                            Подать заявку на участие
+                        </button>
+                    }
+
+                    @if (currentUser != null && currentUser.id_role == 2)
+                    {
+                        <div class="role-note">
+                            Тренер просматривает расписание мероприятий и игр.
+                        </div>
+                    }
+
+                    @if (currentUser != null && (currentUser.id_role == 1 || currentUser.id_role == 4))
+                    {
+                        <hr />
+
+                        <button @onclick="() => LoadParticipants(item.id_event)">
+                            Показать участников
+                        </button>
+
+                        <button @onclick="() => LoadGames(item.id_event)">
+                            Показать игры
+                        </button>
+
+                        <div class="result-block">
+                            <h4>Организация соревнования</h4>
+
+                            <label>Турнирная сетка</label>
+                            <textarea @bind="organizationForms[item.id_event].bracket_info"></textarea>
+
+                            <label>Расписание игр</label>
+                            <textarea @bind="organizationForms[item.id_event].game_schedule"></textarea>
+
+                            <button @onclick="() => SaveOrganization(item.id_event)">
+                                Сохранить данные соревнования
+                            </button>
+                        </div>
+
+                        <div class="result-block">
+                            <h4>Добавить игру</h4>
+
+                            @if (!participantsByEvent.ContainsKey(item.id_event) || participantsByEvent[item.id_event].Count < 2)
+                            {
+                                <p>Для создания игры нужно минимум 2 участника.</p>
+                            }
+                            else
+                            {
+                                <label>Первый участник</label>
+                                <select @bind="gameForms[item.id_event].first_participant">
+                                    <option value="">Выберите участника</option>
+
+                                    @foreach (var participant in participantsByEvent[item.id_event])
+                                    {
+                                        <option value="@participant.user_name">@participant.user_name</option>
+                                    }
+                                </select>
+
+                                <label>Второй участник</label>
+                                <select @bind="gameForms[item.id_event].second_participant">
+                                    <option value="">Выберите участника</option>
+
+                                    @foreach (var participant in participantsByEvent[item.id_event])
+                                    {
+                                        <option value="@participant.user_name">@participant.user_name</option>
+                                    }
+                                </select>
+
+                                <label>Дата и время игры</label>
+                                <input type="datetime-local" @bind="gameForms[item.id_event].game_time" />
+
+                                <button @onclick="() => CreateGame(item.id_event)">
+                                    Добавить игру
+                                </button>
+                            }
+                        </div>
+
+                        @if (selectedEventId == item.id_event && participants != null)
+                        {
+                            <div class="participants-box">
+                                <h4>Участники</h4>
+
+                                @if (participants.Count == 0)
+                                {
+                                    <p>Участников пока нет</p>
+                                }
+                                else
+                                {
+                                    @foreach (var p in participants)
+                                    {
+                                        <div class="participant-row">
+                                            <span>
+                                                @p.user_name
+                                                @if (!string.IsNullOrWhiteSpace(p.user_email))
+                                                {
+                                                    <span> — @p.user_email</span>
+                                                }
+                                            </span>
+
+                                            <button @onclick="() => DeleteParticipant(p.id_participant)">
+                                                Удалить
+                                            </button>
+                                        </div>
+                                    }
+                                }
+                            </div>
+                        }
+
+                        @if (selectedGamesEventId == item.id_event && games != null)
+                        {
+                            <div class="participants-box">
+                                <h4>Расписание игр</h4>
+
+                                @if (games.Count == 0)
+                                {
+                                    <p>Игры пока не добавлены</p>
+                                }
+                                else
+                                {
+                                    @foreach (var game in games)
+                                    {
+                                        <div class="participant-row">
+                                            <span>
+                                                @game.game_time.ToString("dd.MM.yyyy HH:mm"):
+                                                @game.first_participant — @game.second_participant
+                                                <b> (@game.result)</b>
+                                            </span>
+
+                                            <input placeholder="Результат"
+                                                   @bind="gameResultTexts[game.id_game]" />
+
+                                            <button @onclick="() => SaveGameResult(game.id_game)">
+                                                Сохранить
+                                            </button>
+
+                                            <button @onclick="() => DeleteGame(game.id_game)">
+                                                Удалить
+                                            </button>
+                                        </div>
+                                    }
+                                }
+                            </div>
+                        }
+
+                        <div class="result-block">
+                            <h4>Итоговый результат мероприятия</h4>
+
+                            <input placeholder="Введите итоговый результат"
+                                   @bind="resultTexts[item.id_event]" />
+
+                            <button @onclick="() => AddResult(item.id_event)">
+                                Опубликовать результат
+                            </button>
+                        </div>
+                    }
+                </div>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    private List<SportEventModel>? events;
+    private List<CourtModel>? courts;
+    private List<EventParticipantModel>? participants;
+    private List<EventGameModel>? games;
+
+    private UserModel? currentUser;
+
+    private int selectedEventId;
+    private int selectedGamesEventId;
+
+    private string message = "";
+
+    private Dictionary<int, string> resultTexts = new();
+    private Dictionary<int, string> gameResultTexts = new();
+
+    private Dictionary<int, UpdateEventOrganizationRequest> organizationForms = new();
+    private Dictionary<int, CreateEventGameRequest> gameForms = new();
+
+    private Dictionary<int, List<EventParticipantModel>> participantsByEvent = new();
+
+    private CreateEventRequest createRequest = new()
+    {
+        event_date = DateTime.Now,
+        max_participants = 10
+    };
+
+    protected override async Task OnInitializedAsync()
+    {
+        currentUser = await AuthStateService.GetCurrentUser();
+
+        await LoadCourts();
+        await LoadEvents();
+    }
+
+    private async Task LoadCourts()
+    {
+        var response = await CourtApiService.GetAll();
+
+        courts = response != null && response.status
+            ? response.data
+            : new List<CourtModel>();
+    }
+
+    private async Task LoadEvents()
+    {
+        var response = await EventApiService.GetAll();
+
+        if (response != null && response.status)
+        {
+            events = response.data;
+
+            foreach (var item in events)
+            {
+                if (!resultTexts.ContainsKey(item.id_event))
+                {
+                    resultTexts[item.id_event] = "";
+                }
+
+                organizationForms[item.id_event] = new UpdateEventOrganizationRequest
+                {
+                    id_event = item.id_event,
+                    bracket_info = item.bracket_info,
+                    game_schedule = item.game_schedule
+                };
+
+                if (!gameForms.ContainsKey(item.id_event))
+                {
+                    gameForms[item.id_event] = new CreateEventGameRequest
+                    {
+                        id_event = item.id_event,
+                        game_time = DateTime.Now
+                    };
+                }
+
+                await LoadParticipantsForGameSelect(item.id_event);
+            }
+        }
+        else
+        {
+            events = new List<SportEventModel>();
+        }
+    }
+
+    private async Task LoadParticipantsForGameSelect(int idEvent)
+    {
+        var response = await EventApiService.GetParticipants(idEvent);
+
+        participantsByEvent[idEvent] = response != null && response.status
+            ? response.data
+            : new List<EventParticipantModel>();
+    }
+
+    private async Task CreateEvent()
+    {
+        if (currentUser == null)
+        {
+            message = "Необходимо авторизоваться";
+            return;
+        }
+
+        if (currentUser.id_role != 1 && currentUser.id_role != 4)
+        {
+            message = "Создание мероприятий доступно только администратору или организатору";
+            return;
+        }
+
+        if (createRequest.id_court == 0)
+        {
+            message = "Выберите площадку";
+            return;
+        }
+
+        var response = await EventApiService.Create(createRequest);
+
+        if (response != null)
+        {
+            message = response.message;
+
+            createRequest = new CreateEventRequest
+            {
+                event_date = DateTime.Now,
+                max_participants = 10
+            };
+
+            await LoadEvents();
+        }
+    }
+
+    private async Task AddParticipant(int idEvent)
+    {
+        if (currentUser == null)
+        {
+            message = "Необходимо авторизоваться";
+            return;
+        }
+
+        if (currentUser.id_role != 3)
+        {
+            message = "Участие в мероприятии доступно только клиенту";
+            return;
+        }
+
+        var response = await EventApiService.AddParticipant(new EventParticipantRequest
+        {
+            id_event = idEvent,
+            id_user = currentUser.id_user
+        });
+
+        if (response != null)
+        {
+            message = response.message;
+
+            await LoadParticipantsForGameSelect(idEvent);
+            await LoadEvents();
+        }
+    }
+
+    private async Task LoadParticipants(int idEvent)
+    {
+        selectedEventId = idEvent;
+
+        var response = await EventApiService.GetParticipants(idEvent);
+
+        participants = response != null && response.status
+            ? response.data
+            : new List<EventParticipantModel>();
+
+        participantsByEvent[idEvent] = participants;
+    }
+
+    private async Task DeleteParticipant(int idParticipant)
+    {
+        var response = await EventApiService.DeleteParticipant(idParticipant);
+
+        if (response != null)
+        {
+            message = response.message;
+
+            await LoadParticipants(selectedEventId);
+            await LoadParticipantsForGameSelect(selectedEventId);
+            await LoadEvents();
+        }
+    }
+
+    private async Task SaveOrganization(int idEvent)
+    {
+        var response = await EventApiService.UpdateOrganization(organizationForms[idEvent]);
+
+        if (response != null)
+        {
+            message = response.message;
+            await LoadEvents();
+        }
+    }
+
+    private async Task CreateGame(int idEvent)
+    {
+        var form = gameForms[idEvent];
+        form.id_event = idEvent;
+
+        if (string.IsNullOrWhiteSpace(form.first_participant) ||
+            string.IsNullOrWhiteSpace(form.second_participant))
+        {
+            message = "Выберите двух участников";
+            return;
+        }
+
+        if (form.first_participant == form.second_participant)
+        {
+            message = "Нельзя выбрать одного и того же участника";
+            return;
+        }
+
+        var response = await EventApiService.CreateGame(form);
+
+        if (response != null)
+        {
+            message = response.message;
+
+            gameForms[idEvent] = new CreateEventGameRequest
+            {
+                id_event = idEvent,
+                game_time = DateTime.Now
+            };
+
+            await LoadGames(idEvent);
+        }
+    }
+
+    private async Task LoadGames(int idEvent)
+    {
+        selectedGamesEventId = idEvent;
+
+        var response = await EventApiService.GetGames(idEvent);
+
+        if (response != null && response.status)
+        {
+            games = response.data;
+
+            foreach (var game in games)
+            {
+                if (!gameResultTexts.ContainsKey(game.id_game))
+                {
+                    gameResultTexts[game.id_game] = game.result;
+                }
+            }
+        }
+        else
+        {
+            games = new List<EventGameModel>();
+        }
+    }
+
+    private async Task SaveGameResult(int idGame)
+    {
+        var result = gameResultTexts.ContainsKey(idGame)
+            ? gameResultTexts[idGame]
+            : "";
+
+        var response = await EventApiService.UpdateGameResult(new UpdateEventGameResultRequest
+        {
+            id_game = idGame,
+            result = result
+        });
+
+        if (response != null)
+        {
+            message = response.message;
+            await LoadGames(selectedGamesEventId);
+        }
+    }
+
+    private async Task DeleteGame(int idGame)
+    {
+        var response = await EventApiService.DeleteGame(idGame);
+
+        if (response != null)
+        {
+            message = response.message;
+            await LoadGames(selectedGamesEventId);
+        }
+    }
+
+    private async Task AddResult(int idEvent)
+    {
+        string result = resultTexts.ContainsKey(idEvent)
+            ? resultTexts[idEvent]
+            : "";
+
+        var response = await EventApiService.AddResult(new CreateEventResultRequest
+        {
+            id_event = idEvent,
+            result_text = result
+        });
+
+        if (response != null)
+        {
+            message = response.message;
+            await LoadEvents();
+        }
+    }
+}

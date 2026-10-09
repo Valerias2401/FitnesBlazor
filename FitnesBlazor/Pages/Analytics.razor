@@ -1,0 +1,136 @@
+﻿@page "/analytics"
+
+@using FitnesBlazor.ApiRequests.Models
+@using FitnesBlazor.ApiRequests.Services
+
+@inject AnalyticsApiService AnalyticsApiService
+@inject AuthStateService AuthStateService
+
+<div class="card-page">
+    <h3>Аналитика и отчётность</h3>
+
+    <p>
+        Раздел предназначен для формирования отчётов по загрузке площадок,
+        посещаемости секций, выручке, мероприятиям и состоянию инвентаря.
+    </p>
+
+    @if (currentUser == null)
+    {
+        <p>Необходимо авторизоваться.</p>
+    }
+    else if (currentUser.id_role != 1)
+    {
+        <p>Аналитика доступна только администратору комплекса.</p>
+    }
+    else if (dashboard == null)
+    {
+        <p>Загрузка...</p>
+    }
+    else
+    {
+        <div class="module-grid">
+            <div class="module-card">
+                <div class="module-icon">📅</div>
+                <h3>Бронирования</h3>
+                <p>Всего: <b>@dashboard.totalBookings</b></p>
+                <p>Активные: <b>@dashboard.activeBookings</b></p>
+                <p>Отменённые: <b>@dashboard.cancelledBookings</b></p>
+            </div>
+
+            <div class="module-card">
+                <div class="module-icon">💰</div>
+                <h3>Выручка</h3>
+                <p>Сумма по активным бронированиям:</p>
+                <p><b>@dashboard.totalRevenue ₽</b></p>
+            </div>
+
+            <div class="module-card">
+                <div class="module-icon">🏟️</div>
+                <h3>Площадки</h3>
+                <p>Всего площадок: <b>@dashboard.courtsCount</b></p>
+            </div>
+
+            <div class="module-card">
+                <div class="module-icon">🥋</div>
+                <h3>Секции</h3>
+                <p>Всего секций: <b>@dashboard.sectionsCount</b></p>
+                <p>Записей клиентов: <b>@dashboard.sectionEnrollmentsCount</b></p>
+            </div>
+
+            <div class="module-card">
+                <div class="module-icon">✅</div>
+                <h3>Посещаемость</h3>
+                <p>Всего отметок: <b>@dashboard.attendanceTotal</b></p>
+                <p>Присутствовали: <b>@dashboard.attendancePresent</b></p>
+                <p>Отсутствовали: <b>@dashboard.attendanceAbsent</b></p>
+            </div>
+
+            <div class="module-card">
+                <div class="module-icon">🏆</div>
+                <h3>Мероприятия</h3>
+                <p>Всего мероприятий: <b>@dashboard.eventsCount</b></p>
+                <p>Участников: <b>@dashboard.eventParticipantsCount</b></p>
+            </div>
+
+            <div class="module-card">
+                <div class="module-icon">🏀</div>
+                <h3>Инвентарь</h3>
+                <p>Позиций: <b>@dashboard.inventoryCount</b></p>
+                <p>Требуют ремонта: <b>@dashboard.repairCount</b></p>
+                <p>Нужна закупка: <b>@dashboard.purchaseRequiredCount</b></p>
+            </div>
+        </div>
+
+        <div class="form-card inner-form">
+            <h4>Популярность площадок</h4>
+
+            @if (dashboard.popularCourts.Count == 0)
+            {
+                <p>Нет данных по бронированиям.</p>
+            }
+            else
+            {
+                @foreach (var popularCourt in dashboard.popularCourts)
+                {
+                    <p>@popularCourt.court_name — <b>@popularCourt.bookings_count</b> бронирований</p>
+                }
+            }
+        </div>
+
+        <div class="form-card inner-form">
+            <h4>Популярность секций</h4>
+
+            @if (dashboard.popularSections.Count == 0)
+            {
+                <p>Нет данных по секциям.</p>
+            }
+            else
+            {
+                @foreach (var popularSection in dashboard.popularSections)
+                {
+                    <p>@popularSection.section_name — <b>@popularSection.enrollments_count</b> записей</p>
+                }
+            }
+        </div>
+    }
+</div>
+
+@code {
+    private UserModel? currentUser;
+    private AnalyticsDashboardModel? dashboard;
+
+    protected override async Task OnInitializedAsync()
+    {
+        currentUser = await AuthStateService.GetCurrentUser();
+
+        if (currentUser != null && currentUser.id_role == 1)
+        {
+            var response = await AnalyticsApiService.GetDashboard();
+
+            if (response != null && response.status)
+            {
+                dashboard = response.data;
+            }
+        }
+    }
+}

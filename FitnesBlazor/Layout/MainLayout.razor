@@ -1,0 +1,20 @@
+﻿@inherits LayoutComponentBase
+
+<div class="app-shell">
+    <aside class="app-sidebar">
+        <NavMenu />
+    </aside>
+
+    <main class="app-main">
+        <header class="app-header">
+            <div>
+                <h2>Платформа спортивного комплекса</h2>
+                <p>Учебная практика · ASP.NET Core API + Blazor</p>
+            </div>
+        </header>
+
+        <section class="app-content">
+            @Body
+        </section>
+    </main>
+</div>

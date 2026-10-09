@@ -1,0 +1,234 @@
+﻿@page "/bookings"
+
+@using FitnesBlazor.ApiRequests.Models
+@using FitnesBlazor.ApiRequests.Services
+
+@inject BookingApiService BookingApiService
+@inject CourtApiService CourtApiService
+@inject AuthStateService AuthStateService
+
+<div class="card-page">
+    <h3>Бронирование спортивных площадок</h3>
+
+    <p>
+        Клиент и организатор могут бронировать площадки,
+        администратор просматривает все бронирования,
+        а система формирует QR-код для входа.
+    </p>
+
+    @if (!string.IsNullOrWhiteSpace(message))
+    {
+        <div class="message">@message</div>
+    }
+
+    @if (currentUser != null &&
+        (currentUser.id_role == 3 || currentUser.id_role == 4))
+    {
+        <div class="form-card inner-form">
+            <h4>Создать бронирование</h4>
+
+            <label>Площадка</label>
+
+            <select @bind="createRequest.id_court">
+                <option value="0">Выберите площадку</option>
+
+                @if (courts != null)
+                {
+                    @foreach (var court in courts)
+                    {
+                        <option value="@court.id_court">
+                            @court.name (@court.sport_type)
+                        </option>
+                    }
+                }
+            </select>
+
+            <label>Дата</label>
+            <input type="date" @bind="createRequest.booking_date" />
+
+            <label>Время начала</label>
+            <input type="time" @bind="createRequest.start_time" />
+
+            <label>Время окончания</label>
+            <input type="time" @bind="createRequest.end_time" />
+
+            <button @onclick="CreateBooking">
+                Забронировать
+            </button>
+        </div>
+    }
+
+    @if (bookings == null)
+    {
+        <p>Загрузка...</p>
+    }
+    else if (bookings.Count == 0)
+    {
+        <p>Бронирования отсутствуют</p>
+    }
+    else
+    {
+        <div class="module-grid">
+            @foreach (var booking in bookings)
+            {
+                <div class="module-card">
+                    <div class="module-icon">🏟️</div>
+
+                    <h3>@booking.court_name</h3>
+
+                    <p>Вид спорта: <b>@booking.sport_type</b></p>
+
+                    <p>
+                        Пользователь:
+                        <b>@booking.user_name</b>
+                    </p>
+
+                    <p>
+                        Дата:
+                        <b>@booking.booking_date.ToString("dd.MM.yyyy")</b>
+                    </p>
+
+                    <p>
+                        Время:
+                        <b>@booking.start_time - @booking.end_time</b>
+                    </p>
+
+                    <p>
+                        Стоимость:
+                        <b>@booking.payment_amount ₽</b>
+                    </p>
+
+                    <p>
+                        QR-код:
+                        <b>@booking.qr_code</b>
+                    </p>
+
+                    <p>
+                        Статус:
+                        <b>@booking.status</b>
+                    </p>
+
+                    @if (booking.status == "active")
+                    {
+                        @if (currentUser != null &&
+                                    (currentUser.id_role == 1 ||
+                                    booking.id_user == currentUser.id_user))
+                        {
+                            <button @onclick="() => CancelBooking(booking.id_booking)">
+                                Отменить бронирование
+                            </button>
+                        }
+                    }
+                </div>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    private List<BookingModel>? bookings;
+    private List<CourtModel>? courts;
+
+    private UserModel? currentUser;
+
+    private string message = "";
+
+    private CreateBookingRequest createRequest = new()
+    {
+        booking_date = DateTime.Today,
+        start_time = new TimeOnly(10, 0),
+        end_time = new TimeOnly(11, 0)
+    };
+
+    protected override async Task OnInitializedAsync()
+    {
+        currentUser = await AuthStateService.GetCurrentUser();
+
+        await LoadCourts();
+        await LoadBookings();
+    }
+
+    private async Task LoadCourts()
+    {
+        var response = await CourtApiService.GetAll();
+
+        courts = response != null && response.status
+            ? response.data
+            : new List<CourtModel>();
+    }
+
+    private async Task LoadBookings()
+    {
+        if (currentUser == null)
+        {
+            bookings = new List<BookingModel>();
+            return;
+        }
+
+        BookingListResponse? response;
+
+        if (currentUser.id_role == 1)
+        {
+            response = await BookingApiService.GetAll();
+        }
+        else
+        {
+            response = await BookingApiService.GetByUser(currentUser.id_user);
+        }
+
+        bookings = response != null && response.status
+            ? response.data
+            : new List<BookingModel>();
+    }
+
+    private async Task CreateBooking()
+    {
+        if (currentUser == null)
+        {
+            message = "Необходимо авторизоваться";
+            return;
+        }
+
+        if (currentUser.id_role != 3 &&
+            currentUser.id_role != 4)
+        {
+            message = "Бронировать площадки может только клиент или организатор";
+            return;
+        }
+
+        if (createRequest.id_court == 0)
+        {
+            message = "Выберите площадку";
+            return;
+        }
+
+        createRequest.id_user = currentUser.id_user;
+
+        var response = await BookingApiService.Create(createRequest);
+
+        if (response != null)
+        {
+            message = response.message;
+
+            createRequest = new CreateBookingRequest
+            {
+                booking_date = DateTime.Today,
+                start_time = new TimeOnly(10, 0),
+                end_time = new TimeOnly(11, 0)
+            };
+
+            await LoadBookings();
+        }
+    }
+
+    private async Task CancelBooking(int idBooking)
+    {
+        var response = await BookingApiService.Cancel(idBooking);
+
+        if (response != null)
+        {
+            message = response.message;
+            await LoadBookings();
+        }
+    }
+}

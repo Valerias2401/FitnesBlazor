@@ -1,0 +1,181 @@
+﻿@page "/"
+
+@using FitnesBlazor.ApiRequests.Models
+@using FitnesBlazor.ApiRequests.Services
+
+@inject AuthStateService AuthStateService
+@inject AnalyticsApiService AnalyticsApiService
+@inject NavigationManager Navigation
+
+@if (currentUser == null)
+{
+    <div class="landing-page">
+        <section class="landing-hero">
+            <span class="page-badge">Спортивный комплекс</span>
+            <h1>Платформа управления спортивным комплексом</h1>
+            <p>
+                Система автоматизирует бронирование площадок, запись в секции,
+                продажу абонементов, организацию мероприятий, учёт инвентаря
+                и формирование отчётов.
+            </p>
+
+            <div class="two-buttons">
+                <button class="primary-action" @onclick="GoLogin">Войти</button>
+                <button class="light-action" @onclick="GoRegister">Регистрация</button>
+            </div>
+        </section>
+    </div>
+}
+else
+{
+    <div class="dashboard-page">
+        <section class="profile-banner">
+            <div>
+                <span class="page-badge">@RoleName</span>
+                <h1>@currentUser.full_name</h1>
+                <p>@RoleDescription</p>
+
+                <div class="balance-card">
+                    <span>Баланс</span>
+                    <b>@currentUser.balance руб.</b>
+                </div>
+            </div>
+
+            <button class="danger-action" @onclick="Logout">Выйти</button>
+        </section>
+
+        @if (currentUser.id_role == 1 && generalStatistics != null)
+        {
+            <section class="real-dashboard">
+                <div class="dash-stat"><span>Пользователей</span><b>@generalStatistics.usersCount</b></div>
+                <div class="dash-stat"><span>Бронирований</span><b>@generalStatistics.bookingsCount</b></div>
+                <div class="dash-stat"><span>Активных броней</span><b>@generalStatistics.activeBookings</b></div>
+                <div class="dash-stat"><span>Секций</span><b>@generalStatistics.sectionsCount</b></div>
+                <div class="dash-stat"><span>Мероприятий</span><b>@generalStatistics.eventsCount</b></div>
+                <div class="dash-stat"><span>Инвентаря</span><b>@generalStatistics.inventoryCount</b></div>
+                <div class="dash-stat revenue"><span>Выручка</span><b>@revenue руб.</b></div>
+            </section>
+        }
+
+        <section class="module-section">
+            <h2>Разделы системы</h2>
+
+            <div class="module-grid">
+                @if (currentUser.id_role == 1 || currentUser.id_role == 3)
+                {
+                    <a href="/abonements" class="module-card">
+                        🎫
+                        <h3>Абонементы</h3>
+                        <p>Тарифы, покупка и контроль абонементов.</p>
+                    </a>
+                }
+
+                @if (currentUser.id_role == 1 || currentUser.id_role == 3 || currentUser.id_role == 4)
+                {
+                    <a href="/courts" class="module-card">
+                        🏟
+                        <h3>Площадки</h3>
+                        <p>Спортивные зоны, залы и поля комплекса.</p>
+                    </a>
+
+                    <a href="/bookings" class="module-card">
+                        📅
+                        <h3>Бронирования</h3>
+                        <p>Клиент и организатор создают бронь, админ контролирует.</p>
+                    </a>
+                }
+
+                @if (currentUser.id_role == 1 || currentUser.id_role == 2 || currentUser.id_role == 3)
+                {
+                    <a href="/sections" class="module-card">
+                        🏋️
+                        <h3>Секции</h3>
+                        <p>Расписание секций, занятия и запись клиентов.</p>
+                    </a>
+                }
+
+                @if (currentUser.id_role == 1 || currentUser.id_role == 2 || currentUser.id_role == 3 || currentUser.id_role == 4)
+                {
+                    <a href="/events" class="module-card">
+                        🏆
+                        <h3>Мероприятия</h3>
+                        <p>Соревнования, участники, расписание и результаты.</p>
+                    </a>
+                }
+
+                @if (currentUser.id_role == 1)
+                {
+                    <a href="/inventory" class="module-card">
+                        📦
+                        <h3>Инвентарь</h3>
+                        <p>Учёт оборудования, ремонт и списание.</p>
+                    </a>
+
+                    <a href="/analytics" class="module-card">
+                        📊
+                        <h3>Аналитика</h3>
+                        <p>Финансовые и операционные отчёты.</p>
+                    </a>
+                }
+            </div>
+        </section>
+    </div>
+}
+
+@code {
+    private UserModel? currentUser;
+    private GeneralStatisticsModel? generalStatistics;
+    private decimal revenue;
+
+    private string RoleName
+    {
+        get
+        {
+            if (currentUser == null) return "";
+            if (currentUser.id_role == 1) return "Администратор комплекса";
+            if (currentUser.id_role == 2) return "Тренер / инструктор";
+            if (currentUser.id_role == 3) return "Клиент / посетитель";
+            if (currentUser.id_role == 4) return "Организатор мероприятий";
+            return "Пользователь";
+        }
+    }
+
+    private string RoleDescription
+    {
+        get
+        {
+            if (currentUser == null) return "";
+            if (currentUser.id_role == 1) return "Управление площадками, расписанием, тарифами, инвентарём и отчётами.";
+            if (currentUser.id_role == 2) return "Ведение занятий, планирование тренировок и просмотр мероприятий.";
+            if (currentUser.id_role == 3) return "Бронирование площадок, покупка абонементов, запись в секции и участие в мероприятиях.";
+            if (currentUser.id_role == 4) return "Бронирование площадок под соревнования, управление мероприятиями, участниками и результатами.";
+            return "";
+        }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        currentUser = await AuthStateService.GetCurrentUser();
+
+        if (currentUser != null && currentUser.id_role == 1)
+        {
+            var generalResponse = await AnalyticsApiService.GetGeneralStatistics();
+            if (generalResponse != null && generalResponse.status)
+                generalStatistics = generalResponse.statistics;
+
+            var revenueResponse = await AnalyticsApiService.GetRevenue();
+            if (revenueResponse != null && revenueResponse.status)
+                revenue = revenueResponse.revenue;
+        }
+    }
+
+    private void GoLogin() => Navigation.NavigateTo("/login");
+
+    private void GoRegister() => Navigation.NavigateTo("/register");
+
+    private async Task Logout()
+    {
+        await AuthStateService.Logout();
+        Navigation.NavigateTo("/login", true);
+    }
+}
